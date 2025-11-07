@@ -190,27 +190,6 @@ function* buildStandardTypes(
   }
 }
 
-// function* buildAuth(
-//   int: Interface,
-//   options: NamespacedTypescriptHttpClientOptions,
-// ): Iterable<string> {
-//   const schemes = getSecuritySchemes(int);
-
-//   if (schemes.length && options?.httpClient?.includeAuthSchemes) {
-//     yield 'private readonly auth: {';
-//     for (const scheme of schemes) {
-//       if (isApiKeyScheme(scheme)) {
-//         yield `'${scheme.name.value}'?: {key: string}`;
-//       } else if (isBasicScheme(scheme)) {
-//         yield `'${scheme.name.value}'?: {username: string, password: string}`;
-//       } else if (isOAuth2Scheme(scheme)) {
-//         yield `'${scheme.name.value}'?: {accessToken: string}`;
-//       }
-//     }
-//     yield '},';
-//   }
-// }
-
 function* buildClasses(
   service: Service,
   options: NamespacedTypescriptHttpClientOptions,
@@ -313,19 +292,6 @@ function sep(httpParam: HttpParameter): string {
       return '';
   }
 }
-
-// function getSecuritySchemes(int: Interface): SecurityScheme[] {
-//   return Array.from(
-//     int.methods
-//       .flatMap((m) => m.security)
-//       .flatMap((opt) => opt)
-//       .reduce(
-//         (map, scheme) => map.set(scheme.name.value, scheme),
-//         new Map<string, SecurityScheme>(),
-//       )
-//       .values(),
-//   );
-// }
 
 class MethodFactory {
   private constructor(
@@ -445,35 +411,6 @@ class MethodFactory {
         yield '}';
       }
     }
-
-    // if (options?.httpClient?.includeAuthSchemes) {
-    //   for (const scheme of this.schemes) {
-    //     if (isApiKeyScheme(scheme)) {
-    //       if (scheme.in.value === 'header') {
-    //         yield `if(this.auth${safe(scheme.name.value)}) {`;
-    //         yield `  headers${safe(scheme.parameter.value)} = this.auth${safe(
-    //           scheme.name.value,
-    //         )}.key`;
-    //         yield '}';
-    //       }
-    //     } else if (isBasicScheme(scheme)) {
-    //       yield `if(this.auth${safe(scheme.name.value)}) {`;
-    //       yield `// TODO: remove deprecated method for node targets`;
-    //       yield `  headers.authorization = \`Basic $\{ btoa(\`$\{this.auth${safe(
-    //         scheme.name.value,
-    //       )}.username\}:$\{this.auth${safe(
-    //         scheme.name.value,
-    //       )}.password\}\`) \}\``;
-    //       yield '}';
-    //     } else if (isOAuth2Scheme(scheme)) {
-    //       yield `if(this.auth${safe(scheme.name.value)}) {`;
-    //       yield `  headers.authorization = \`Bearer $\{ this.auth${safe(
-    //         scheme.name.value,
-    //       )}.accessToken \}\``;
-    //       yield '}';
-    //     }
-    //   }
-    // }
   }
 
   private *buildQuery(): Iterable<string> {
@@ -529,20 +466,6 @@ class MethodFactory {
 
       yield '}';
     }
-
-    // if (this.options?.httpClient?.includeAuthSchemes) {
-    //   for (const scheme of this.schemes) {
-    //     if (isApiKeyScheme(scheme)) {
-    //       if (scheme.in.value === 'query') {
-    //         yield `if(this.auth${safe(scheme.name.value)}) {`;
-    //         yield `  query.push(\`${scheme.parameter.value}=$\{this.auth${safe(
-    //           scheme.name.value,
-    //         )}.key\}\`);`;
-    //         yield '}';
-    //       }
-    //     }
-    //   }
-    // }
   }
 
   private *buildPath(): Iterable<string> {
