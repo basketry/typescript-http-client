@@ -339,7 +339,7 @@ class MethodFactory {
     );
     yield `async ${buildMethodName(this.method)}(`;
     yield* buildMethodParams(this.method, 'types');
-    yield `): ${buildMethodReturnValue(this.method, 'types')} {`;
+    yield `): ${buildMethodReturnValue(this.method, undefined, 'types')} {`;
     yield ` try {`;
 
     if (this.method.parameters.length) {
