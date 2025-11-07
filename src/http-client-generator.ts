@@ -27,6 +27,7 @@ import {
   buildMethodReturnValue,
   buildParameterName,
   buildTypeName,
+  isStreamingMethod,
 } from '@basketry/typescript';
 import { buildHttpClientName } from './name-factory';
 import { Builder as DtoBuilder } from '@basketry/typescript-dtos/lib/builder';
@@ -85,6 +86,16 @@ function* buildImports(
   service: Service,
   options?: NamespacedTypescriptHttpClientOptions,
 ): Iterable<string> {
+  const httpMethods = service.interfaces
+    .flatMap((int) => int.protocols?.http ?? [])
+    .flatMap((p) => p.methods);
+
+  const hasStreamingMethods = httpMethods.some(isStreamingMethod);
+
+  if (hasStreamingMethods) {
+    yield `import { events } from 'fetch-event-stream';`;
+  }
+
   if (options?.httpClient?.validation === 'zod') {
     yield `import * as z from 'zod';`;
   }
@@ -152,11 +163,11 @@ function* buildStandardTypes(
   yield `}`;
   yield ``;
   yield `export interface FetchLike {`;
-  yield `<T>(resource: string, init?: {`;
+  yield `(resource: string, init?: {`;
   if (methods.size) yield `  method?: ${Array.from(methods).join(' | ')},`;
   yield `  headers?: Record<string, string>,`;
   yield `  body?: string,`;
-  yield `}): Promise<{ json(): Promise<T>, status: number }>;`;
+  yield `}): Promise<Response>;`;
   yield `}`;
   if (includeFormatDate || includeFormatDateTime) {
     yield '';
@@ -333,14 +344,24 @@ class MethodFactory {
   private *buildMethod(
     options: NamespacedTypescriptHttpClientOptions,
   ): Iterable<string> {
+    const isStreaming = isStreamingMethod(this.httpMethod);
     yield* buildDescription(
       this.method.description,
       this.method.deprecated?.value,
     );
-    yield `async ${buildMethodName(this.method)}(`;
+    yield `async ${
+      isStreamingMethod(this.httpMethod) ? '*' : ''
+    }${buildMethodName(this.method)}(`;
     yield* buildMethodParams(this.method, 'types');
-    yield `): ${buildMethodReturnValue(this.method, undefined, 'types')} {`;
-    yield ` try {`;
+    yield `): ${buildMethodReturnValue(
+      this.method,
+      this.httpMethod,
+      'types',
+    )} {`;
+
+    if (!isStreaming) {
+      yield ` try {`;
+    }
 
     if (this.method.parameters.length) {
       switch (options?.httpClient?.validation) {
@@ -368,10 +389,12 @@ class MethodFactory {
     yield* this.buildBody();
     yield '';
     yield* this.buildFetch();
-    yield '  } catch (unhandledException) {';
-    yield '    console.error(unhandledException);';
-    yield '    return { errors: this.mapErrors([], unhandledException) } as any;';
-    yield '  }';
+    if (!isStreaming) {
+      yield '  } catch (unhandledException) {';
+      yield '    console.error(unhandledException);';
+      yield '    return { errors: this.mapErrors([], unhandledException) } as any;';
+      yield '  }';
+    }
     yield '}';
   }
 
@@ -519,12 +542,7 @@ class MethodFactory {
   }
 
   private *buildFetch(): Iterable<string> {
-    const returnType = this.method.returns
-      ? `<dtos.${pascal(this.method.returns.value.typeName.value)}Dto>`
-      : '';
-
-    if (this.method.returns)
-      yield `const res = await this.fetch${returnType}(path`;
+    if (this.method.returns) yield `const res = await this.fetch(path`;
     else {
       yield `await this.fetch(path`;
     }
@@ -552,14 +570,23 @@ class MethodFactory {
         'client-outbound',
       );
 
-      if (this.options?.httpClient?.validation === 'zod') {
-        yield `return mappers.${mapperName}(await res.json());`;
+      if (isStreamingMethod(this.httpMethod)) {
+        yield `if (res.ok) {
+          let stream = events(res);
+          for await (let event of stream) {
+            yield mappers.${mapperName}(JSON.stringify(event.data ?? '') as any);
+          }
+        }`;
       } else {
-        const sanitizerName = camel(
-          `sanitize_${snake(responseTypeName.name.value)}`,
-        );
+        if (this.options?.httpClient?.validation === 'zod') {
+          yield `return mappers.${mapperName}((await res.json()) as any);`;
+        } else {
+          const sanitizerName = camel(
+            `sanitize_${snake(responseTypeName.name.value)}`,
+          );
 
-        yield `return sanitizers.${sanitizerName}(mappers.${mapperName}(await res.json()));`;
+          yield `return sanitizers.${sanitizerName}(mappers.${mapperName}((await res.json()) as any));`;
+        }
       }
     }
   }
